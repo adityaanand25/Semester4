@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
+import httpx
 from fastapi import File, FastAPI, Form, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,6 +26,52 @@ logger = logging.getLogger(__name__)
 
 
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+LEETCODE_GRAPHQL_URL = "https://leetcode.com/graphql"
+LEETCODE_HEADERS = {
+        "Referer": "https://leetcode.com",
+        "Origin": "https://leetcode.com",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+}
+LEETCODE_PROFILE_QUERY = """
+query userProfile($username: String!) {
+    matchedUser(username: $username) {
+        username
+        profile {
+            ranking
+            reputation
+        }
+        submitStats: submitStatsGlobal {
+            acSubmissionNum {
+                difficulty
+                count
+                submissions
+            }
+            totalSubmissionNum {
+                difficulty
+                submissions
+            }
+        }
+    }
+}
+"""
+LEETCODE_TIMEOUT = httpx.Timeout(10.0, connect=5.0)
+
+
+def _safe_int(value: Any) -> int:
+        try:
+                return int(value)
+        except (TypeError, ValueError):
+                return 0
+
+
+def _find_difficulty_entry(entries: List[Dict[str, Any]], difficulty: str) -> Dict[str, Any]:
+        target = difficulty.lower()
+        for entry in entries:
+                current = str(entry.get("difficulty", "")).lower()
+                if current == target:
+                        return entry
+        return {}
 
 
 def _validate_email(value: str) -> str:
@@ -155,22 +202,68 @@ def _seeded_random(value: str) -> random.Random:
     return random.Random(value.lower())
 
 
-def _generate_leetcode_profile(username: str) -> Dict[str, Any]:
-    rng = _seeded_random(f"leetcode-{username}")
-    total_solved = rng.randint(250, 1600)
-    easy = int(total_solved * rng.uniform(0.35, 0.5))
-    medium = int(total_solved * rng.uniform(0.3, 0.45))
-    hard = max(total_solved - easy - medium, 10)
+async def _fetch_leetcode_profile(username: str) -> Dict[str, Any]:
+    payload = {
+        "operationName": "userProfile",
+        "variables": {"username": username},
+        "query": LEETCODE_PROFILE_QUERY,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=LEETCODE_TIMEOUT) as client:
+            response = await client.post(
+                LEETCODE_GRAPHQL_URL,
+                json=payload,
+                headers=LEETCODE_HEADERS,
+            )
+            response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        logger.warning("LeetCode API error %s for %s", exc.response.status_code, username)
+        raise HTTPException(status_code=502, detail="LeetCode API responded with an error.") from exc
+    except httpx.RequestError as exc:
+        logger.error("Unable to reach LeetCode for %s: %s", username, exc)
+        raise HTTPException(status_code=502, detail="Unable to reach LeetCode at the moment.") from exc
+
+    payload_json = response.json()
+    errors = payload_json.get("errors") or []
+    if errors:
+        message = errors[0].get("message", "")
+        logger.warning("LeetCode GraphQL error for %s: %s", username, message)
+        if "does not exist" in message.lower():
+            raise HTTPException(status_code=404, detail="LeetCode user not found.")
+        raise HTTPException(status_code=502, detail="LeetCode API error.")
+
+    matched_user = payload_json.get("data", {}).get("matchedUser")
+    if not matched_user:
+        raise HTTPException(status_code=404, detail="LeetCode user not found.")
+
+    profile = matched_user.get("profile") or {}
+    stats = matched_user.get("submitStats") or {}
+    ac_stats = stats.get("acSubmissionNum") or []
+    total_stats = stats.get("totalSubmissionNum") or []
+
+    easy = _safe_int(_find_difficulty_entry(ac_stats, "easy").get("count"))
+    medium = _safe_int(_find_difficulty_entry(ac_stats, "medium").get("count"))
+    hard = _safe_int(_find_difficulty_entry(ac_stats, "hard").get("count"))
+
+    total_all = _safe_int(_find_difficulty_entry(ac_stats, "all").get("count"))
+    total_solved = total_all if total_all else easy + medium + hard
+
+    attempts_all = _safe_int(_find_difficulty_entry(total_stats, "all").get("submissions"))
+    if attempts_all == 0:
+        attempts_all = sum(_safe_int(entry.get("submissions")) for entry in total_stats)
+    acceptance_rate = round((total_solved / attempts_all) * 100, 2) if attempts_all else None
+
     return {
-        "username": username,
-        "ranking": rng.randint(10000, 400000),
+        "username": matched_user.get("username") or username,
+        "ranking": profile.get("ranking"),
         "total_solved": total_solved,
         "easy_solved": easy,
         "medium_solved": medium,
         "hard_solved": hard,
-        "acceptance_rate": round(rng.uniform(45, 85), 2),
-        "reputation": rng.randint(1000, 5000),
-        "contribution_points": rng.randint(200, 1500),
+        "acceptance_rate": acceptance_rate,
+        "reputation": profile.get("reputation"),
+        "contribution_points": profile.get("contributionPoints"),
     }
 
 
@@ -934,7 +1027,7 @@ async def login(request: LoginRequest) -> AuthResponse:
 
 @app.get("/leetcode/{username}")
 async def get_leetcode_profile(username: str) -> Dict[str, Any]:
-    return _generate_leetcode_profile(username)
+    return await _fetch_leetcode_profile(username)
 
 
 @app.get("/github/{username}")
@@ -944,9 +1037,11 @@ async def get_github_profile(username: str) -> Dict[str, Any]:
 
 @app.get("/profile/{leetcode_username}/{github_username}")
 async def get_combined_profile(leetcode_username: str, github_username: str) -> Dict[str, Any]:
+    leetcode_profile = await _fetch_leetcode_profile(leetcode_username)
+    github_profile = _generate_github_profile(github_username)
     return {
-        "leetcode": _generate_leetcode_profile(leetcode_username),
-        "github": _generate_github_profile(github_username),
+        "leetcode": leetcode_profile,
+        "github": github_profile,
     }
 
 
