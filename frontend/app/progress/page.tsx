@@ -1,9 +1,18 @@
 "use client"
 
+// this page runs entirely on the client; uses React state and effects
+
+// shared layout components
 import { Navbar } from "@/components/navbar"
 import { Card } from "@/components/ui/card"
+
+// React hooks for component state management
 import { useState, useEffect } from "react"
+
+// API helpers and type definitions for progress data
 import { learningAPI, type ProgressStats, type ProgressHistory, type Achievement } from "@/lib/api"
+
+// icons used in the progress dashboard
 import { 
   TrendingUp, 
   Trophy, 
@@ -15,6 +24,8 @@ import {
   Award,
   AlertCircle
 } from "lucide-react"
+
+// charting components from recharts library
 import {
   LineChart,
   Line,
@@ -31,9 +42,11 @@ import {
   Cell
 } from "recharts"
 
+// colour palette for pie chart segments
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8']
 
-// Helper function to format error messages
+// utility to normalise error objects returned by axios/our API
+// this ensures the UI can display a readable message regardless of format
 const formatErrorMessage = (err: any): string => {
   if (typeof err === 'string') return err
   
@@ -49,17 +62,20 @@ const formatErrorMessage = (err: any): string => {
 }
 
 export default function ProgressPage() {
-  const [stats, setStats] = useState<ProgressStats | null>(null)
-  const [history, setHistory] = useState<ProgressHistory[]>([])
-  const [achievements, setAchievements] = useState<Achievement[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [timeRange, setTimeRange] = useState(30)
+  // component state
+  const [stats, setStats] = useState<ProgressStats | null>(null) // aggregate numbers
+  const [history, setHistory] = useState<ProgressHistory[]>([]) // daily timeline
+  const [achievements, setAchievements] = useState<Achievement[]>([]) // recent badges
+  const [loading, setLoading] = useState(true) // loading spinner
+  const [error, setError] = useState<string | null>(null) // error banner
+  const [timeRange, setTimeRange] = useState(30) // days of history to fetch
 
+  // refetch whenever timeRange changes (user picks 7/30/90 days)
   useEffect(() => {
     fetchAllData()
   }, [timeRange])
 
+  // load all progress-related data in parallel
   const fetchAllData = async () => {
     setLoading(true)
     setError(null)
@@ -79,6 +95,7 @@ export default function ProgressPage() {
     }
   }
 
+  // transform raw history into shape expected by recharts components
   const prepareChartData = () => {
     return history.map(item => ({
       date: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -89,6 +106,7 @@ export default function ProgressPage() {
     }))
   }
 
+  // build data array for pie chart summarising activity counts
   const prepareActivityData = () => {
     if (!stats) return []
     return [
