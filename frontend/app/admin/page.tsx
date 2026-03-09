@@ -1,8 +1,13 @@
 "use client"
 
+// admin dashboard runs entirely on client side
+
+// layout components
 import { Navbar } from "@/components/navbar"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+
+// recharts for analytics visualization
 import {
   LineChart,
   Line,
@@ -16,8 +21,12 @@ import {
   Pie,
   Cell,
 } from "recharts"
+
+// icons for stat cards
 import { Users, BookOpen, BarChart3, TrendingUp } from "lucide-react"
 
+// sample user growth data for the line chart
+// shows total users and active users over 4 weeks
 const userData = [
   { name: "Week 1", users: 120, active: 80 },
   { name: "Week 2", users: 180, active: 140 },
@@ -25,6 +34,8 @@ const userData = [
   { name: "Week 4", users: 320, active: 260 },
 ]
 
+// course enrollment distribution for the pie chart
+// shows user breakdown across different course topics
 const courseStats = [
   { name: "JavaScript", value: 35 },
   { name: "React", value: 25 },
@@ -32,6 +43,7 @@ const courseStats = [
   { name: "Other", value: 20 },
 ]
 
+// oklch colour palette for pie chart segments
 const COLORS = ["oklch(0.60 0.25 280)", "oklch(0.65 0.28 270)", "oklch(0.50 0.30 260)", "oklch(0.55 0.25 300)"]
 
 export default function AdminPage() {
@@ -40,19 +52,20 @@ export default function AdminPage() {
       <Navbar />
       <main className="pt-20 pb-12">
         <div className="min-h-screen relative">
+          {/* decorative background gradient blobs */}
           <div className="absolute inset-0 -z-10">
             <div className="absolute top-20 left-10 w-72 h-72 bg-primary/10 rounded-full blur-3xl opacity-20" />
             <div className="absolute bottom-20 right-10 w-72 h-72 bg-accent/10 rounded-full blur-3xl opacity-20" />
           </div>
 
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-            {/* Header */}
+            {/* page header */}
             <div className="space-y-2">
               <h1 className="text-4xl font-bold gradient-text">Admin Dashboard</h1>
               <p className="text-muted-foreground">Platform analytics and management</p>
             </div>
 
-            {/* Stats Cards */}
+            {/* key metrics - overview cards for total users, courses, quizzes, average score */}
             <div className="grid md:grid-cols-4 gap-6">
               {[
                 { icon: Users, label: "Total Users", value: "1,234" },
@@ -66,16 +79,18 @@ export default function AdminPage() {
                       <p className="text-sm text-muted-foreground">{stat.label}</p>
                       <p className="text-2xl font-bold gradient-text mt-2">{stat.value}</p>
                     </div>
+                    {/* icon displayed on the right side of each stat card */}
                     <stat.icon className="w-8 h-8 text-accent opacity-50" />
                   </div>
                 </Card>
               ))}
             </div>
 
-            {/* Charts */}
+            {/* analytics charts - user growth trends and course enrollment breakdown */}
             <div className="grid lg:grid-cols-2 gap-6">
               <Card className="glass p-6">
                 <h2 className="text-lg font-semibold mb-4">User Growth</h2>
+                {/* line chart showing total vs active users over time */}
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={userData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
@@ -96,6 +111,7 @@ export default function AdminPage() {
 
               <Card className="glass p-6">
                 <h2 className="text-lg font-semibold mb-4">Course Distribution</h2>
+                {/* pie chart showing enrollment across course topics */}
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
@@ -118,7 +134,7 @@ export default function AdminPage() {
               </Card>
             </div>
 
-            {/* Management Section */}
+            {/* admin action buttons for content and user management */}
             <Card className="glass p-6">
               <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
               <div className="grid md:grid-cols-3 gap-4">
