@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 
 // recharts for analytics visualization
-//The basic charts
+//The basic chart
 import {
   LineChart,
   Line,
