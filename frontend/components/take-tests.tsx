@@ -27,7 +27,7 @@ import { useAuthStore } from "@/lib/store"
 import { useRouter } from "next/navigation"
 
 // backend API base, set via NEXT_PUBLIC_API_BASE or fallback to localhost
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000"
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE;
 
 // quiz metadata returned from server
 interface Quiz {

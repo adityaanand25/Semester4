@@ -285,14 +285,27 @@ class QuizAttemptSubmitRequest(BaseModel):
 
 
 def _parse_origins(raw_origins: Optional[str]) -> List[str]:
-    if not raw_origins:
-        return [
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "http://localhost:8000",
-            "http://127.0.0.1:8000",
-        ]
-    return [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+    default_origins = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ]
+
+    origins: List[str] = []
+
+    for env_name in ("FRONTEND_URL", "BACKEND_URL"):
+        value = os.getenv(env_name)
+        if value:
+            origins.extend(origin.strip() for origin in value.split(",") if origin.strip())
+
+    if raw_origins:
+        origins.extend(origin.strip() for origin in raw_origins.split(",") if origin.strip())
+    else:
+        origins.extend(default_origins)
+
+    # Keep order stable while removing duplicates.
+    return list(dict.fromkeys(origins))
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
