@@ -4862,6 +4862,9 @@ class ConversationMessage(BaseModel):
 class DoubtChatRequest(BaseModel):
     message: str
     conversation_history: List[Dict[str, str]] = Field(default_factory=list)
+    weak_topics: List[str] = Field(default_factory=list, description="User's weak topics for personalization")
+    readiness_score: Optional[int] = None
+    learning_goal: Optional[str] = None
 
 
 class DoubtChatResponse(BaseModel):
@@ -4869,19 +4872,42 @@ class DoubtChatResponse(BaseModel):
     section: Optional[str] = None  # "explanation", "example", "summary", "question"
     practice_question: Optional[str] = None
     difficulty_level: Optional[str] = None
+    suggestions: List[str] = Field(default_factory=list, description="Follow-up suggestions for user")
 
 
 class LearningAssistant:
     """
     Intelligent Learning Assistant AI that helps users deeply understand concepts.
-    Follows 8 core teaching rules for adaptive, interactive learning.
+    Provides dynamic, context-aware responses similar to ChatGPT/Gemini.
+    Adapts based on user level, weak topics, and learning goals.
     """
 
     DIFFICULTY_KEYWORDS = {
-        "beginner": ["what is", "how to", "tell me about", "basics", "intro", "explain simply", "ez", "easy"],
-        "intermediate": ["why", "how does", "when", "advanced", "complex", "comparison"],
-        "advanced": ["optimize", "edge case", "performance", "system design", "architecture", "deep dive"],
+        "beginner": ["what is", "how to", "tell me about", "basics", "intro", "explain simply", "ez", "easy", "beginner", "simple"],
+        "intermediate": ["why", "how does", "when", "advanced", "complex", "comparison", "intermediate", "scenario"],
+        "advanced": ["optimize", "edge case", "performance", "system design", "architecture", "deep dive", "advanced", "production"],
     }
+    
+    # System prompt for better context understanding
+    SYSTEM_PROMPT = """You are an expert learning coach and mentor who teaches programming, data structures, algorithms, and interview preparation. Your role is to:
+
+1. **Understand the user**: Listen carefully to their exact question and level
+2. **Adapt responses**: Tailor explanations based on their skill level and learning goal
+3. **Teach deeply**: Don't just give answers - help them understand the 'why' and 'how'
+4. **Be conversational**: Like a real mentor, ask follow-up questions to check understanding
+5. **Provide examples**: Use real-world analogies and code examples when relevant
+6. **Suggest practice**: Recommend specific practice problems or scenarios
+7. **Track progress**: Remember previous topics discussed in this conversation
+8. **Be encouraging**: Maintain a supportive, positive tone
+
+When responding:
+- Start with a brief, clear answer to their question
+- Explain the reasoning behind the concept
+- Provide 1-2 concrete examples
+- Highlight common mistakes or edge cases
+- Suggest the next learning step or related topics
+- End with an actionable suggestion or practice challenge
+"""
 
     TOPIC_EXAMPLES = {
         "array": {
@@ -4973,69 +4999,156 @@ class LearningAssistant:
                 return topic
         return "general"
 
-    def generate_response(self, user_message: str, conversation_history: List[Dict[str, str]]) -> DoubtChatResponse:
-        """Generate an interactive, teaching-focused response."""
+    def generate_response(
+        self,
+        user_message: str,
+        conversation_history: List[Dict[str, str]],
+        user_id: Optional[str] = None,
+        weak_topics: Optional[List[str]] = None,
+        readiness_score: Optional[int] = None,
+        learning_goal: Optional[str] = None,
+    ) -> DoubtChatResponse:
+        """
+        Generate a dynamic, context-aware response that's personalized to the user.
+        Takes into account their level, weak topics, and learning goals.
+        """
         history = conversation_history or []
-
-        # Detect level
+        weak_topics = weak_topics or []
+        
+        # Detect user's difficulty level based on question
         level = self.detect_user_level(user_message, history)
-
-        # Extract topic
+        
+        # Extract topic from the message
         topic = self.extract_topic(user_message)
-
+        
+        # Build context for personalized response
+        context_factors = []
+        if readiness_score:
+            context_factors.append(f"readiness score: {readiness_score}%")
+        if weak_topics:
+            context_factors.append(f"weak areas: {', '.join(weak_topics)}")
+        if learning_goal:
+            context_factors.append(f"current goal: {learning_goal}")
+        
+        # Build enhanced response
         response_text = ""
         practice_q = None
-
+        suggestions = []
+        
+        # Process specific known topics
         if topic in self.TOPIC_EXAMPLES:
-            # Provide explanation at appropriate level
             explanation = self.TOPIC_EXAMPLES[topic].get(level, self.TOPIC_EXAMPLES[topic].get("beginner"))
-            response_text = f"🎯 **Concept**: {topic.title()}\n\n"
-            response_text += f"📚 **Explanation**:\n{explanation}\n\n"
-
-            # Add example (keep examples level-appropriate)
-            response_text += f"💡 **Example**:\n"
+            
+            response_text = f"🎯 **{topic.title()}**\n\n"
+            
+            # Personalized intro
+            if topic in weak_topics:
+                response_text += f"I see this is one of your weak areas - let's master it together! 💪\n\n"
+            
+            # Main explanation
+            response_text += f"**Explanation** ({level.title()} Level):\n"
+            response_text += f"{explanation}\n\n"
+            
+            # Real-world connection
+            response_text += f"**Why It Matters**:\n"
             if level == "beginner":
-                response_text += f"Think of {topic} like real-world objects. If it's an array, it's like a row of seats in a theater.\n\n"
+                response_text += f"Understanding {topic} is fundamental for interview preparation. It's one of the most asked topics!\n\n"
             elif level == "intermediate":
-                response_text += f"For {topic}, remember: time complexity matters! Consider all operations you need.\n\n"
+                response_text += f"{topic.title()} is crucial for optimization problems. Interviewers love to test deep understanding here.\n\n"
             else:
-                response_text += f"In production, consider edge cases and optimization for {topic}.\n\n"
-
-            # Add quick summary
-            response_text += f"📝 **Quick Summary**:\n"
-            response_text += f"- {topic.title()} is used when you need fast lookups or organized data\n"
-            response_text += f"- Main operations: {'insert, find, delete' if topic != 'array' else 'access, insert, delete'}\n\n"
-
+                response_text += f"At this level, you should know {topic} deeply - edge cases, optimizations, and when to use alternatives.\n\n"
+            
+            # Concrete example
+            response_text += f"**Practical Example**:\n"
+            if topic == "array":
+                response_text += "If you're building a student grade system, an array stores each grade. O(1) access makes retrieval instant!\n\n"
+            elif topic == "hash table":
+                response_text += "A dictionary (hash table) lets you look up a person's phone number in O(1) instead of searching through a list.\n\n"
+            elif topic == "linked list":
+                response_text += "When you need to frequently insert/delete from the middle (like a playlist), linked lists are better than arrays.\n\n"
+            else:
+                response_text += f"In interviews, {topic} problems often appear in medium to hard questions.\n\n"
+            
             # Add practice question
             if topic in self.PRACTICE_QUESTIONS:
                 practice_q = random.choice(self.PRACTICE_QUESTIONS[topic])
-                response_text += f"🎯 **Practice Question**:\n{practice_q}\n"
-
+                response_text += f"**Try This Practice Question:**\n{practice_q}\n\n"
+            
+            # Suggestions for follow-up
+            if level == "beginner":
+                suggestions = [
+                    f"Ask me to trace through a {topic} example step-by-step",
+                    f"Request common mistakes with {topic}",
+                    "Want to try a beginner practice problem?"
+                ]
+            elif level == "intermediate":
+                suggestions = [
+                    f"Compare {topic} with alternatives",
+                    "Discuss time/space complexity analysis",
+                    "Show me interview-level problems"
+                ]
+            else:
+                suggestions = [
+                    "Discuss optimization techniques",
+                    "Edge cases and corner scenarios",
+                    "System design applications"
+                ]
+        
         elif "help" in user_message.lower() or "explain" in user_message.lower():
             response_text = (
-                "Hey! 👋 I'm your Learning Assistant. I can help you understand:\n\n"
-                "• **Data Structures**: Arrays, Linked Lists, Trees, Graphs, Hash Tables\n"
-                "• **Algorithms**: Sorting, Searching, Recursion, Binary Search\n"
-                "• **Concepts**: Any programming, DSA, or interview topic\n\n"
-                "Just ask me about a topic, and I'll explain it step-by-step! "
-                "You can ask at any level—I'll adjust! 🚀"
+                "👋 Hi! I'm your personalized Learning Coach. Here's what I can help with:\n\n"
+                "📚 **Data Structures**: Arrays, Linked Lists, Trees, Graphs, Hash Tables, Stacks, Queues\n"
+                "🔍 **Algorithms**: Sorting, Searching, Recursion, DFS/BFS, Binary Search, Dynamic Programming\n"
+                "🎯 **Interview Prep**: System Design, Problem-Solving Strategies, Optimal Solutions\n"
+                "💡 **Concepts**: Time/Space Complexity, Trade-offs, Real-world Applications\n\n"
+                "**How I can help:**\n"
+                "• Explain concepts at your level (beginner → advanced)\n"
+                "• Provide practice problems with hints\n"
+                "• Help you understand 'why' not just 'how'\n"
+                "• Remember your weak areas and focus on them\n\n"
+                "Just ask me anything! 🚀"
             )
-        else:
-            # Generic helpful response
+            suggestions = ["Explain arrays for beginners", "Why is recursion important?", "How do hash tables work?"]
+        
+        elif any(word in user_message.lower() for word in ["improve", "weak", "struggle", "difficult"]):
+            # User asking about improvement
             response_text = (
-                f"I see you're asking about: {user_message[:50]}...\n\n"
-                "Could you be more specific? For example:\n"
-                "- 'Explain arrays for beginners'\n"
-                "- 'Why is recursion important?'\n"
-                "- 'How do hash tables work advanced?'\n\n"
-                "Or type 'help' to see what I can teach! 😊"
+                "Great mindset! 🌟 Let's work on strengthening your understanding.\n\n"
+                "Here's my approach:\n"
+                "1. **Identify the gap**: What specific part are you struggling with?\n"
+                "2. **Learn foundations**: We'll build from basics up\n"
+                "3. **Practice actively**: Solve problems and understand patterns\n"
+                "4. **Review insights**: Reflect on what you learned\n\n"
             )
-
+            
+            if weak_topics:
+                response_text += f"**Your current weak areas**: {', '.join(weak_topics)}\n\n"
+                response_text += f"I recommend we focus on these one by one. Which would you like to tackle first?\n"
+                suggestions = [f"Help me understand {topic}" for topic in weak_topics[:3]]
+            else:
+                response_text += "Tell me which specific topic you find challenging, and I'll create a focused learning plan!\n"
+                suggestions = ["Explain a specific concept", "Give me a practice problem", "Create a study plan"]
+        
+        else:
+            # Generic understanding response
+            response_text = (
+                f"I see you're interested in: **{user_message[:60]}{'...' if len(user_message) > 60 else ''}**\n\n"
+                "Could you be more specific? Try asking:\n"
+                "• 'What is [concept]?'\n"
+                "• 'Explain [topic] for [level]'\n"
+                "• 'How does [concept] work?'\n"
+                "• 'Why do we use [concept]?'\n"
+                "• 'Show me a problem with [topic]'\n\n"
+                "Or type 'help' to see all available topics! 😊"
+            )
+            suggestions = ["Explain a data structure", "Help with algorithms", "Practice interview questions"]
+        
         return DoubtChatResponse(
             response=response_text,
             section="explanation" if topic != "general" else "intro",
             practice_question=practice_q,
             difficulty_level=level,
+            suggestions=suggestions,
         )
 
 
@@ -5046,13 +5159,23 @@ learning_assistant = LearningAssistant()
 @app.post("/doubts/chat")
 async def doubts_chat(
     request: DoubtChatRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> DoubtChatResponse:
     """
     Chat endpoint for the Doubt Chatbot using Learning Assistant AI.
     Provides structured, interactive learning responses.
+    Requires authentication.
     """
     try:
-        response = learning_assistant.generate_response(request.message, request.conversation_history)
+        user_id = current_user.get("id") or current_user.get("user_id")
+        response = learning_assistant.generate_response(
+            user_message=request.message,
+            conversation_history=request.conversation_history,
+            user_id=user_id,
+            weak_topics=request.weak_topics,
+            readiness_score=request.readiness_score,
+            learning_goal=request.learning_goal
+        )
         return response
     except Exception as e:
         logger.error(f"Error in doubts_chat: {e}", exc_info=True)

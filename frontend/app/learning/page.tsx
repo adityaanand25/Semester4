@@ -11,6 +11,7 @@ import {
   type ReadinessAnalytics,
   type ReminderItem,
 } from "@/lib/api"
+import { LearningAgent } from "@/components/learning-agent"
 
 const formatError = (err: any): string => {
   if (typeof err === "string") return err
@@ -121,6 +122,12 @@ export default function LearningPage() {
                 <div className="text-3xl font-bold">{pendingReminders.length}</div>
               </Card>
             </div>
+
+            <LearningAgent
+              weakTopics={readiness?.weak_topics}
+              readinessScore={readiness?.readiness_score}
+              nextWeekGoal={roadmap?.weeks?.[0]?.goal || "Build strong fundamentals"}
+            />
 
             <Card className="p-6 space-y-5">
               <div className="flex items-center justify-between gap-4">
