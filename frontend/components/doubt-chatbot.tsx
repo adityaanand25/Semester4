@@ -4,15 +4,47 @@ import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { MessageSquare, X, Send, Loader2, Bot, User } from "lucide-react"
+import { MessageSquare, X, Send, Loader2, Bot, User, Lightbulb } from "lucide-react"
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE;
 
 interface Message {
   id: string
   role: "user" | "assistant"
   content: string
   timestamp: Date
+  practiceQuestion?: string
+  difficultyLevel?: string
+}
+
+const formatContent = (content: string) => {
+  // Split content into sections based on markdown-like formatting
+  return content.split('\n').map((line, idx) => {
+    if (line.includes('**') && line.includes(':')) {
+      const [label, ...rest] = line.split(':')
+      return (
+        <div key={idx} className="mt-2 mb-1">
+          <span className="font-semibold text-sm">{label.replace(/\*\*/g, '')}</span>
+          <span className="text-sm">{rest.join(':')}</span>
+        </div>
+      )
+    }
+    if (line.trim().startsWith('•')) {
+      return (
+        <div key={idx} className="ml-4 text-sm py-1">
+          {line}
+        </div>
+      )
+    }
+    if (line.trim()) {
+      return (
+        <p key={idx} className="text-sm py-1">
+          {line}
+        </p>
+      )
+    }
+    return <div key={idx} className="h-1" />
+  })
 }
 
 export function DoubtChatbot() {
@@ -21,7 +53,7 @@ export function DoubtChatbot() {
     {
       id: "1",
       role: "assistant",
-      content: "Hi! I'm your AI doubt assistant. Ask me anything about programming, data structures, algorithms, or interview preparation!",
+      content: "👋 Hi! I'm your Learning Assistant AI. I help you deeply understand concepts about programming, data structures, algorithms, and more!\n\nAsk me anything like:\n• 'Explain arrays for beginners'\n• 'What is recursion?'\n• 'How do hash tables work?'\n\nI'll break it down step-by-step with examples and practice questions! 🚀",
       timestamp: new Date()
     }
   ])
@@ -52,6 +84,10 @@ export function DoubtChatbot() {
     setLoading(true)
 
     try {
+      if (!API_BASE_URL) {
+        throw new Error("API_BASE_URL is not configured. Check .env.local file.")
+      }
+
       const response = await fetch(`${API_BASE_URL}/doubts/chat`, {
         method: "POST",
         headers: {
@@ -72,18 +108,21 @@ export function DoubtChatbot() {
           id: (Date.now() + 1).toString(),
           role: "assistant",
           content: data.response,
-          timestamp: new Date()
+          timestamp: new Date(),
+          practiceQuestion: data.practice_question,
+          difficultyLevel: data.difficulty_level
         }
         setMessages(prev => [...prev, assistantMessage])
       } else {
-        throw new Error("Failed to get response")
+        const errorData = await response.text()
+        throw new Error(`API Error: ${response.status} - ${errorData}`)
       }
     } catch (error) {
-      console.error("Error:", error)
+      console.error("Chatbot Error:", error)
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: "Sorry, I'm having trouble connecting right now. Please try again later or submit your doubt through the Doubts page for expert assistance.",
+        content: "Sorry, I'm having trouble connecting right now. Please try again or rephrase your question! 🤔",
         timestamp: new Date()
       }
       setMessages(prev => [...prev, errorMessage])
@@ -104,8 +143,8 @@ export function DoubtChatbot() {
       {/* Floating Chat Button */}
       {!isOpen && (
         <Button
-          onClick={() => window.open("https://codearc.pages.dev/", "_blank", "noopener,noreferrer")}
-          className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg hover:scale-110 transition-transform z-50"
+          onClick={() => setIsOpen(true)}
+          className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg hover:scale-110 transition-transform z-50 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
           size="icon"
         >
           <MessageSquare className="h-6 w-6" />
@@ -114,16 +153,16 @@ export function DoubtChatbot() {
 
       {/* Chat Window */}
       {isOpen && (
-        <Card className="fixed bottom-6 right-6 w-96 h-[600px] shadow-2xl z-50 flex flex-col">
+        <Card className="fixed bottom-6 right-6 w-96 h-[650px] shadow-2xl z-50 flex flex-col rounded-xl overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-primary to-accent rounded-t-lg">
+          <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-blue-600 to-purple-600">
             <div className="flex items-center gap-2">
               <div className="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center">
-                <Bot className="h-6 w-6 text-white" />
+                <Lightbulb className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h3 className="font-semibold text-white">Doubt Assistant</h3>
-                <p className="text-xs text-white/80">Always here to help</p>
+                <h3 className="font-semibold text-white text-sm">Learning Assistant</h3>
+                <p className="text-xs text-white/80">Learn deeply, not just answers</p>
               </div>
             </div>
             <Button
@@ -137,28 +176,59 @@ export function DoubtChatbot() {
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/20">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
             {messages.map((message) => (
               <div
                 key={message.id}
-                className={`flex gap-3 ${
+                className={`flex gap-2 ${
                   message.role === "user" ? "justify-end" : "justify-start"
                 }`}
               >
                 {message.role === "assistant" && (
-                  <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                    <Bot className="h-5 w-5 text-white" />
+                  <div className="h-7 w-7 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center flex-shrink-0 mt-1">
+                    <Bot className="h-4 w-4 text-white" />
                   </div>
                 )}
                 <div
-                  className={`max-w-[75%] rounded-lg p-3 ${
+                  className={`max-w-[80%] rounded-lg p-3 ${
                     message.role === "user"
-                      ? "bg-primary text-white"
-                      : "bg-background border"
+                      ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-br-none"
+                      : "bg-white border border-slate-200 text-slate-900 rounded-bl-none"
                   }`}
                 >
-                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                  <p className="text-xs mt-1 opacity-70">
+                  <div className="text-sm leading-relaxed">
+                    {message.role === "user" ? (
+                      <p className="whitespace-pre-wrap">{message.content}</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {formatContent(message.content)}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Practice Question */}
+                  {message.practiceQuestion && (
+                    <div className="mt-3 p-2 bg-yellow-50 border-l-2 border-yellow-400 rounded">
+                      <p className="text-xs font-semibold text-yellow-800">✓ Try this:</p>
+                      <p className="text-xs text-yellow-700 mt-1">{message.practiceQuestion}</p>
+                    </div>
+                  )}
+
+                  {/* Difficulty Badge */}
+                  {message.difficultyLevel && (
+                    <div className="mt-2 flex items-center gap-1">
+                      <span className="text-xs font-medium text-slate-600">Level: </span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        message.difficultyLevel === "beginner" ? "bg-green-100 text-green-700" :
+                        message.difficultyLevel === "intermediate" ? "bg-blue-100 text-blue-700" :
+                        "bg-purple-100 text-purple-700"
+                      }`}>
+                        {message.difficultyLevel}
+                      </span>
+                    </div>
+                  )}
+
+                  <p className="text-xs mt-2 opacity-70">
                     {message.timestamp.toLocaleTimeString([], { 
                       hour: '2-digit', 
                       minute: '2-digit' 
@@ -166,19 +236,19 @@ export function DoubtChatbot() {
                   </p>
                 </div>
                 {message.role === "user" && (
-                  <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
-                    <User className="h-5 w-5 text-white" />
+                  <div className="h-7 w-7 rounded-full bg-slate-300 flex items-center justify-center flex-shrink-0 mt-1">
+                    <User className="h-4 w-4 text-white" />
                   </div>
                 )}
               </div>
             ))}
             {loading && (
-              <div className="flex gap-3">
-                <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                  <Bot className="h-5 w-5 text-white" />
+              <div className="flex gap-2">
+                <div className="h-7 w-7 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center flex-shrink-0">
+                  <Bot className="h-4 w-4 text-white" />
                 </div>
-                <div className="bg-background border rounded-lg p-3">
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                <div className="bg-white border border-slate-200 rounded-lg p-3">
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
                 </div>
               </div>
             )}
@@ -186,31 +256,25 @@ export function DoubtChatbot() {
           </div>
 
           {/* Input */}
-          <div className="p-4 border-t bg-background">
+          <div className="p-3 border-t bg-white">
             <div className="flex gap-2">
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Type your doubt..."
+                placeholder="Ask me anything..."
                 disabled={loading}
-                className="flex-1"
+                className="flex-1 text-sm"
               />
               <Button
                 onClick={handleSend}
                 disabled={loading || !input.trim()}
-                size="icon"
+                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-3"
+                size="sm"
               >
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
+                <Send className="h-4 w-4" />
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Press Enter to send • Shift + Enter for new line
-            </p>
           </div>
         </Card>
       )}

@@ -4848,3 +4848,214 @@ async def get_readiness_analytics(current_user: Dict[str, Any] = Depends(get_cur
         "mock_tests": _safe_int(activity.get("mock_tests")),
         "weak_topics": weak_topics,
     }
+
+
+# ============================================================================
+# LEARNING ASSISTANT AI SERVICE
+# ============================================================================
+
+class ConversationMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
+
+class DoubtChatRequest(BaseModel):
+    message: str
+    conversation_history: List[Dict[str, str]] = Field(default_factory=list)
+
+
+class DoubtChatResponse(BaseModel):
+    response: str
+    section: Optional[str] = None  # "explanation", "example", "summary", "question"
+    practice_question: Optional[str] = None
+    difficulty_level: Optional[str] = None
+
+
+class LearningAssistant:
+    """
+    Intelligent Learning Assistant AI that helps users deeply understand concepts.
+    Follows 8 core teaching rules for adaptive, interactive learning.
+    """
+
+    DIFFICULTY_KEYWORDS = {
+        "beginner": ["what is", "how to", "tell me about", "basics", "intro", "explain simply", "ez", "easy"],
+        "intermediate": ["why", "how does", "when", "advanced", "complex", "comparison"],
+        "advanced": ["optimize", "edge case", "performance", "system design", "architecture", "deep dive"],
+    }
+
+    TOPIC_EXAMPLES = {
+        "array": {
+            "beginner": "Arrays store multiple items in one place. Like a row of boxes, each box holds something.",
+            "intermediate": "Arrays are contiguous memory blocks. Access is O(1), but insertion/deletion can be O(n).",
+            "advanced": "Arrays vs Linked Lists: O(1) access vs O(n) access; O(n) insertion vs O(1) insertion.",
+        },
+        "recursion": {
+            "beginner": "Recursion is when a function calls itself. Like looking in a mirror reflecting another mirror.",
+            "intermediate": "A recursive function must have a base case (stop condition) and a recursive case.",
+            "advanced": "Tail recursion optimization; solving recurrence relations T(n) = T(n-1) + O(1)",
+        },
+        "binary search": {
+            "beginner": "Binary search divides a sorted list in half each time to find an item quickly.",
+            "intermediate": "Time complexity is O(log n). Works only on SORTED data.",
+            "advanced": "Binary search tree operations; applications in finding boundary conditions; bisect algorithm",
+        },
+        "hash table": {
+            "beginner": "Hash tables use a key to find values quickly, like a phone directory.",
+            "intermediate": "Hash function distributes keys. Collision handling: chaining or open addressing.",
+            "advanced": "Load factor; hash function properties (universality); consistent hashing",
+        },
+        "linked list": {
+            "beginner": "A linked list is a chain of boxes, each pointing to the next.",
+            "intermediate": "Singly vs Doubly linked lists. No random access; O(n) traversal.",
+            "advanced": "Skip lists; XOR linked lists; memory efficiency; cycle detection (Floyd's algorithm)",
+        },
+        "graph": {
+            "beginner": "A graph is a network of connected nodes (vertices). Edges show connections.",
+            "intermediate": "Directed vs undirected. DFS/BFS for traversal. Adjacency matrix vs list.",
+            "advanced": "Topological sort; minimum spanning tree; shortest path algorithms; network flow",
+        },
+        "tree": {
+            "beginner": "A tree is a hierarchical structure with a root and branches.",
+            "intermediate": "Binary tree, BST. Traversals: inorder, preorder, postorder. Height & balance.",
+            "advanced": "AVL trees, Red-Black trees, B-trees. Splay trees; self-balancing properties",
+        },
+        "sorting": {
+            "beginner": "Sorting arranges items in order. Bubble sort is simple but slow.",
+            "intermediate": "Quick sort O(n log n), Merge sort O(n log n), Heap sort. Stability matters.",
+            "advanced": "Comparison-based lower bound O(n log n); counting sort, radix sort; online algorithms",
+        },
+    }
+
+    PRACTICE_QUESTIONS = {
+        "array": [
+            "MCQ: To find max in array [1,5,3,2], which approach is O(1)? A) Linear search B) Skip to last C) You need to scan all",
+            "CODE: Write code to reverse an array without extra space.",
+            "SCENARIO: You have student marks [45, 89, 76]. Find students scoring > 50. How would you do it efficiently?",
+        ],
+        "recursion": [
+            "MCQ: What makes this infinite? A) Missing base case B) Wrong return C) Function name",
+            "TRACE: What does factorial(3) return? Trace the calls.",
+            "CODE: Write a recursive function to sum array elements.",
+        ],
+    }
+
+    def __init__(self):
+        self.user_levels: Dict[str, str] = {}  # Track user levels by conversation
+        self.last_topics: Dict[str, str] = {}  # Track last topic
+
+    def detect_user_level(self, message: str, history: List[Dict[str, str]]) -> str:
+        """Detect if user is beginner, intermediate, or advanced."""
+        message_lower = message.lower()
+
+        score = {"beginner": 0, "intermediate": 0, "advanced": 0}
+
+        for level, keywords in self.DIFFICULTY_KEYWORDS.items():
+            for keyword in keywords:
+                if keyword in message_lower:
+                    score[level] += 1
+
+        if history:
+            # If user asks follow-ups on advanced topics, likely advanced
+            if any(
+                word in history[-1].get("content", "").lower()
+                for word in ["optimize", "performance", "edge case"]
+            ):
+                score["advanced"] += 2
+
+        detected = max(score, key=score.get)
+        return detected if score[detected] > 0 else "intermediate"
+
+    def extract_topic(self, message: str) -> str:
+        """Extract the topic from user message."""
+        message_lower = message.lower()
+        for topic in self.TOPIC_EXAMPLES.keys():
+            if topic in message_lower or topic.replace(" ", "") in message_lower.replace(" ", ""):
+                return topic
+        return "general"
+
+    def generate_response(self, user_message: str, conversation_history: List[Dict[str, str]]) -> DoubtChatResponse:
+        """Generate an interactive, teaching-focused response."""
+        history = conversation_history or []
+
+        # Detect level
+        level = self.detect_user_level(user_message, history)
+
+        # Extract topic
+        topic = self.extract_topic(user_message)
+
+        response_text = ""
+        practice_q = None
+
+        if topic in self.TOPIC_EXAMPLES:
+            # Provide explanation at appropriate level
+            explanation = self.TOPIC_EXAMPLES[topic].get(level, self.TOPIC_EXAMPLES[topic].get("beginner"))
+            response_text = f"🎯 **Concept**: {topic.title()}\n\n"
+            response_text += f"📚 **Explanation**:\n{explanation}\n\n"
+
+            # Add example (keep examples level-appropriate)
+            response_text += f"💡 **Example**:\n"
+            if level == "beginner":
+                response_text += f"Think of {topic} like real-world objects. If it's an array, it's like a row of seats in a theater.\n\n"
+            elif level == "intermediate":
+                response_text += f"For {topic}, remember: time complexity matters! Consider all operations you need.\n\n"
+            else:
+                response_text += f"In production, consider edge cases and optimization for {topic}.\n\n"
+
+            # Add quick summary
+            response_text += f"📝 **Quick Summary**:\n"
+            response_text += f"- {topic.title()} is used when you need fast lookups or organized data\n"
+            response_text += f"- Main operations: {'insert, find, delete' if topic != 'array' else 'access, insert, delete'}\n\n"
+
+            # Add practice question
+            if topic in self.PRACTICE_QUESTIONS:
+                practice_q = random.choice(self.PRACTICE_QUESTIONS[topic])
+                response_text += f"🎯 **Practice Question**:\n{practice_q}\n"
+
+        elif "help" in user_message.lower() or "explain" in user_message.lower():
+            response_text = (
+                "Hey! 👋 I'm your Learning Assistant. I can help you understand:\n\n"
+                "• **Data Structures**: Arrays, Linked Lists, Trees, Graphs, Hash Tables\n"
+                "• **Algorithms**: Sorting, Searching, Recursion, Binary Search\n"
+                "• **Concepts**: Any programming, DSA, or interview topic\n\n"
+                "Just ask me about a topic, and I'll explain it step-by-step! "
+                "You can ask at any level—I'll adjust! 🚀"
+            )
+        else:
+            # Generic helpful response
+            response_text = (
+                f"I see you're asking about: {user_message[:50]}...\n\n"
+                "Could you be more specific? For example:\n"
+                "- 'Explain arrays for beginners'\n"
+                "- 'Why is recursion important?'\n"
+                "- 'How do hash tables work advanced?'\n\n"
+                "Or type 'help' to see what I can teach! 😊"
+            )
+
+        return DoubtChatResponse(
+            response=response_text,
+            section="explanation" if topic != "general" else "intro",
+            practice_question=practice_q,
+            difficulty_level=level,
+        )
+
+
+# Initialize Learning Assistant
+learning_assistant = LearningAssistant()
+
+
+@app.post("/doubts/chat")
+async def doubts_chat(
+    request: DoubtChatRequest,
+) -> DoubtChatResponse:
+    """
+    Chat endpoint for the Doubt Chatbot using Learning Assistant AI.
+    Provides structured, interactive learning responses.
+    """
+    try:
+        response = learning_assistant.generate_response(request.message, request.conversation_history)
+        return response
+    except Exception as e:
+        logger.error(f"Error in doubts_chat: {e}", exc_info=True)
+        return DoubtChatResponse(
+            response="Sorry, I'm having trouble understanding. Could you rephrase your question? 🤔"
+        )
