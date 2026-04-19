@@ -29,6 +29,7 @@ import { useRouter } from "next/navigation"
 // backend API base, set via NEXT_PUBLIC_API_BASE or fallback to localhost
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000").replace(/\/$/, "")
 const TOKEN_STORAGE_KEYS = ["auth_token", "token", "access_token"] as const
+const JOB_PREFERENCE_STORAGE_KEY = "edunerve_job_preference"
 
 const getStoredAccessToken = () => {
   for (const key of TOKEN_STORAGE_KEYS) {
@@ -42,6 +43,15 @@ const getStoredAccessToken = () => {
 
 const persistAccessToken = (token: string) => {
   TOKEN_STORAGE_KEYS.forEach((key) => localStorage.setItem(key, token))
+}
+
+const resolveTargetRole = (jobPreference?: string): string | null => {
+  const value = (jobPreference || "").trim().toLowerCase()
+  if (!value) return null
+  if (value === "software-developer" || value === "software engineer" || value === "software-engineer") {
+    return "software engineer"
+  }
+  return value.replace(/-/g, " ")
 }
 
 let refreshPromise: Promise<string | null> | null = null
@@ -262,6 +272,7 @@ export default function TakeTestsPage() {
         body: JSON.stringify({
           subject,
           topic: topic || null,
+          target_role: resolveTargetRole(user?.jobPreference || localStorage.getItem(JOB_PREFERENCE_STORAGE_KEY) || ""),
           difficulty,
           num_questions: numQuestions,
           quiz_type: "mixed",

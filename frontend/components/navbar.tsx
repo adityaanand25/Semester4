@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAuthStore } from "@/lib/store"
 import {
   BookOpen,
@@ -19,14 +20,35 @@ import {
 import { useState, useEffect } from "react"
 import { ThemeToggle } from "@/components/theme-toggle"
 
+const JOB_OPTIONS = [
+  { value: "software-developer", label: "Software Developer" },
+  { value: "data-scientist", label: "Data Scientist" },
+  { value: "web-developer", label: "Web Developer" },
+  { value: "cybersecurity-analyst", label: "Cybersecurity Analyst" },
+  { value: "database-administrator", label: "Database Administrator" },
+  { value: "network-administrator", label: "Network Administrator" },
+  { value: "it-consultant", label: "IT Consultant" },
+  { value: "game-developer", label: "Game Developer" },
+  { value: "ai-ml-engineer", label: "AI/ML Engineer" },
+]
+
+const JOB_PREFERENCE_STORAGE_KEY = "edunerve_job_preference"
+
 export function Navbar() {
   const pathname = usePathname()
-  const { user, logout } = useAuthStore()
+  const { user, setUser, logout } = useAuthStore()
   const [menuOpen, setMenuOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [jobPreference, setJobPreference] = useState("")
 
   useEffect(() => {
     setMounted(true)
+    if (typeof window !== "undefined") {
+      const storedPreference = window.localStorage.getItem(JOB_PREFERENCE_STORAGE_KEY)
+      if (storedPreference) {
+        setJobPreference(storedPreference)
+      }
+    }
   }, [])
 
   useEffect(() => {
@@ -35,6 +57,16 @@ export function Navbar() {
       document.body.style.overflow = ""
     }
   }, [menuOpen])
+
+  const handleJobPreferenceChange = (value: string) => {
+    setJobPreference(value)
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(JOB_PREFERENCE_STORAGE_KEY, value)
+    }
+    if (user) {
+      setUser({ ...user, jobPreference: value })
+    }
+  }
 
   const navLinks = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -142,6 +174,18 @@ export function Navbar() {
 
           {mounted && (
             <div className="hidden md:flex items-center gap-2">
+              <Select value={jobPreference} onValueChange={handleJobPreferenceChange}>
+                <SelectTrigger className="w-44 h-9">
+                  <SelectValue placeholder="Job Preference" />
+                </SelectTrigger>
+                <SelectContent>
+                  {JOB_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <ThemeToggle />
               {user ? (
                 <>

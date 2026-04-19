@@ -8,7 +8,6 @@ import { Navbar } from "@/components/navbar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { useAuthStore } from "@/lib/store"
 import { formatApiError } from "@/lib/utils"
 import { authAPI } from "@/lib/api"
@@ -16,17 +15,7 @@ import { toast } from "sonner"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 
-const JOB_OPTIONS = [
-  { value: "software-developer", label: "Software Developer" },
-  { value: "data-scientist", label: "Data Scientist" },
-  { value: "web-developer", label: "Web Developer" },
-  { value: "cybersecurity-analyst", label: "Cybersecurity Analyst" },
-  { value: "database-administrator", label: "Database Administrator" },
-  { value: "network-administrator", label: "Network Administrator" },
-  { value: "it-consultant", label: "IT Consultant" },
-  { value: "game-developer", label: "Game Developer" },
-  { value: "ai-ml-engineer", label: "AI/ML Engineer" },
-]
+const JOB_PREFERENCE_STORAGE_KEY = "edunerve_job_preference"
 
 export default function SignupPage() {
   const router = useRouter()
@@ -36,7 +25,6 @@ export default function SignupPage() {
     password: "",
     name: "",
     confirmPassword: "",
-    jobPreference: "",
   })
   const [loading, setLoading] = useState(false)
 
@@ -58,8 +46,11 @@ export default function SignupPage() {
       return
     }
 
-    if (!formData.jobPreference) {
-      toast.error("Select your job preference")
+    const selectedJobPreference =
+      typeof window !== "undefined" ? window.localStorage.getItem(JOB_PREFERENCE_STORAGE_KEY) || "" : ""
+
+    if (!selectedJobPreference) {
+      toast.error("Select your job preference from the header dropdown")
       return
     }
 
@@ -72,7 +63,7 @@ export default function SignupPage() {
         metadata: {
           username: formData.email.split("@")[0],
           full_name: formData.name,
-          job_preference: formData.jobPreference,
+          job_preference: selectedJobPreference,
         },
       }
 
@@ -92,7 +83,7 @@ export default function SignupPage() {
         email: data.email,
         name: formData.name || data.email.split("@")[0],
         role: "student" as const,
-        jobPreference: formData.jobPreference,
+        jobPreference: selectedJobPreference,
       }
       setUser(newUser)
 
@@ -156,30 +147,6 @@ export default function SignupPage() {
                   className="mt-2 bg-white/5 border-white/20"
                   required
                 />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Job Preference</label>
-                <Select
-                  value={formData.jobPreference}
-                  onValueChange={(value) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      jobPreference: value,
-                    }))
-                  }
-                >
-                  <SelectTrigger className="mt-2 bg-white/5 border-white/20">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {JOB_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
 
               <div>

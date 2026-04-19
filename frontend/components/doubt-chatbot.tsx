@@ -134,7 +134,9 @@ export function DoubtChatbot() {
       {/* Floating Chat Button */}
       {!isOpen && (
         <Button
-          onClick={() => setIsOpen(true)}
+          onClick={() => {
+            window.location.assign("https://codearc.pages.dev/")
+          }}
           className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg hover:scale-110 transition-transform z-50 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
           size="icon"
         >

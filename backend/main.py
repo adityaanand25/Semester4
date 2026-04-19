@@ -274,6 +274,7 @@ class AgentRunRequest(BaseModel):
 class QuizGenerateRequest(BaseModel):
     subject: str = Field(..., min_length=1, max_length=100)
     topic: Optional[str] = Field(None, max_length=100)
+    target_role: Optional[str] = Field(None, max_length=100)
     difficulty: str = Field("medium")
     num_questions: int = Field(10, ge=1, le=20)
     quiz_type: str = Field("mixed")
@@ -2648,6 +2649,410 @@ QUIZ_ATTEMPT_ID_COUNTER = count(1)
 FILLER_WORDS = {"um", "uh", "like", "you know", "so"}
 
 
+SOFTWARE_ENGINEER_MIXED_QUESTION_BANK: List[Dict[str, Any]] = [
+    {
+        "id": "se-1",
+        "question_text": "What is the time complexity of binary search on a sorted array?",
+        "options": ["O(n)", "O(log n)", "O(n log n)", "O(1)"],
+        "correct_answer": "O(log n)",
+        "difficulty": "easy",
+        "tags": ["algorithms", "searching"],
+    },
+    {
+        "id": "se-2",
+        "question_text": "Which data structure follows First-In-First-Out (FIFO) order?",
+        "options": ["Stack", "Queue", "Tree", "Graph"],
+        "correct_answer": "Queue",
+        "difficulty": "easy",
+        "tags": ["data-structures", "queue"],
+    },
+    {
+        "id": "se-3",
+        "question_text": "What is the worst-case time complexity of quicksort?",
+        "options": ["O(n log n)", "O(n^2)", "O(log n)", "O(n)"],
+        "correct_answer": "O(n^2)",
+        "difficulty": "medium",
+        "tags": ["algorithms", "sorting"],
+    },
+    {
+        "id": "se-4",
+        "question_text": "Which traversal of a Binary Search Tree returns values in sorted order?",
+        "options": ["Preorder", "Postorder", "Inorder", "Level order"],
+        "correct_answer": "Inorder",
+        "difficulty": "easy",
+        "tags": ["trees", "bst"],
+    },
+    {
+        "id": "se-5",
+        "question_text": "Which principle does a stack follow?",
+        "options": ["FIFO", "LIFO", "Both FIFO and LIFO", "Neither"],
+        "correct_answer": "LIFO",
+        "difficulty": "easy",
+        "tags": ["data-structures", "stack"],
+    },
+    {
+        "id": "se-6",
+        "question_text": "Which data structure is typically used by Breadth-First Search (BFS)?",
+        "options": ["Stack", "Queue", "Tree", "Array"],
+        "correct_answer": "Queue",
+        "difficulty": "easy",
+        "tags": ["graphs", "bfs"],
+    },
+    {
+        "id": "se-7",
+        "question_text": "Which data structure is typically used by Depth-First Search (DFS)?",
+        "options": ["Queue", "Stack", "Heap", "Tree"],
+        "correct_answer": "Stack",
+        "difficulty": "easy",
+        "tags": ["graphs", "dfs"],
+    },
+    {
+        "id": "se-8",
+        "question_text": "What is the time complexity of merge sort?",
+        "options": ["O(n log n)", "O(n^2)", "O(log n)", "O(n)"],
+        "correct_answer": "O(n log n)",
+        "difficulty": "easy",
+        "tags": ["algorithms", "sorting"],
+    },
+    {
+        "id": "se-9",
+        "question_text": "What is the average time complexity of heap sort?",
+        "options": ["O(n log n)", "O(n^2)", "O(n)", "O(log n)"],
+        "correct_answer": "O(n log n)",
+        "difficulty": "easy",
+        "tags": ["algorithms", "sorting", "heap"],
+    },
+    {
+        "id": "se-10",
+        "question_text": "In sorting, what does it mean for an algorithm to be stable?",
+        "options": ["It is always fast", "It preserves relative order of equal elements", "It uses less memory", "It must be recursive"],
+        "correct_answer": "It preserves relative order of equal elements",
+        "difficulty": "medium",
+        "tags": ["algorithms", "sorting"],
+    },
+    {
+        "id": "se-11",
+        "question_text": "Which of the following is a linear data structure?",
+        "options": ["Tree", "Graph", "Array", "Heap"],
+        "correct_answer": "Array",
+        "difficulty": "easy",
+        "tags": ["data-structures"],
+    },
+    {
+        "id": "se-12",
+        "question_text": "Which of the following is a non-linear data structure?",
+        "options": ["Stack", "Queue", "Tree", "Array"],
+        "correct_answer": "Tree",
+        "difficulty": "easy",
+        "tags": ["data-structures"],
+    },
+    {
+        "id": "se-13",
+        "question_text": "Hashing is primarily used to optimize which operation?",
+        "options": ["Sorting", "Searching", "Deleting files", "Traversal"],
+        "correct_answer": "Searching",
+        "difficulty": "easy",
+        "tags": ["hashing", "data-structures"],
+    },
+    {
+        "id": "se-14",
+        "question_text": "In hash tables, a collision occurs when:",
+        "options": ["A stack overflows", "A queue is full", "Two keys map to the same index", "A tree becomes unbalanced"],
+        "correct_answer": "Two keys map to the same index",
+        "difficulty": "medium",
+        "tags": ["hashing"],
+    },
+    {
+        "id": "se-15",
+        "question_text": "An AVL tree is best described as:",
+        "options": ["A generic binary tree", "A self-balanced Binary Search Tree", "A heap", "A graph"],
+        "correct_answer": "A self-balanced Binary Search Tree",
+        "difficulty": "medium",
+        "tags": ["trees", "bst"],
+    },
+    {
+        "id": "se-16",
+        "question_text": "Which algorithm can be used for cycle detection in graphs?",
+        "options": ["DFS", "Binary Search", "Heap Sort", "Queue Rotation"],
+        "correct_answer": "DFS",
+        "difficulty": "medium",
+        "tags": ["graphs", "dfs"],
+    },
+    {
+        "id": "se-17",
+        "question_text": "Which underlying data structure is commonly used to implement a priority queue?",
+        "options": ["Stack", "Heap", "Array only", "Graph"],
+        "correct_answer": "Heap",
+        "difficulty": "easy",
+        "tags": ["heap", "priority-queue"],
+    },
+    {
+        "id": "se-18",
+        "question_text": "What is the time complexity of linear search in the worst case?",
+        "options": ["O(log n)", "O(n)", "O(n log n)", "O(1)"],
+        "correct_answer": "O(n)",
+        "difficulty": "easy",
+        "tags": ["algorithms", "searching"],
+    },
+    {
+        "id": "se-19",
+        "question_text": "Which representation is commonly used to store dense graphs?",
+        "options": ["Adjacency matrix", "Binary tree", "Stack", "Queue"],
+        "correct_answer": "Adjacency matrix",
+        "difficulty": "medium",
+        "tags": ["graphs"],
+    },
+    {
+        "id": "se-20",
+        "question_text": "Topological sort is defined for which type of graph?",
+        "options": ["Undirected tree", "Directed Acyclic Graph (DAG)", "Any cyclic graph", "Heap"],
+        "correct_answer": "Directed Acyclic Graph (DAG)",
+        "difficulty": "medium",
+        "tags": ["graphs", "dag"],
+    },
+    {
+        "id": "se-21",
+        "question_text": "Dijkstra's algorithm is guaranteed to work correctly when edge weights are:",
+        "options": ["Negative", "Non-negative", "Both negative and positive", "Undefined"],
+        "correct_answer": "Non-negative",
+        "difficulty": "medium",
+        "tags": ["graphs", "shortest-path"],
+    },
+    {
+        "id": "se-22",
+        "question_text": "What additional condition can Bellman-Ford detect compared to Dijkstra's algorithm?",
+        "options": ["Cycles in trees", "Negative weight cycles", "Only connected graphs", "Graph coloring"],
+        "correct_answer": "Negative weight cycles",
+        "difficulty": "medium",
+        "tags": ["graphs", "shortest-path"],
+    },
+    {
+        "id": "se-23",
+        "question_text": "Dynamic Programming mainly stores what to avoid recomputation?",
+        "options": ["Future guesses", "Results of subproblems", "Stack frames only", "Queue states"],
+        "correct_answer": "Results of subproblems",
+        "difficulty": "easy",
+        "tags": ["dynamic-programming"],
+    },
+    {
+        "id": "se-24",
+        "question_text": "In SQL, what is the purpose of a primary key?",
+        "options": ["Allow duplicates", "Uniquely identify each row", "Store foreign table names", "Allow only NULL values"],
+        "correct_answer": "Uniquely identify each row",
+        "difficulty": "easy",
+        "tags": ["sql", "database"],
+    },
+    {
+        "id": "se-25",
+        "question_text": "A foreign key in a relational database is used to:",
+        "options": ["Force uniqueness in same table", "Reference a key in another table", "Create indexes automatically", "Delete parent rows"],
+        "correct_answer": "Reference a key in another table",
+        "difficulty": "easy",
+        "tags": ["sql", "database"],
+    },
+    {
+        "id": "se-26",
+        "question_text": "Normalization in databases primarily helps reduce:",
+        "options": ["Compute power", "Data redundancy", "Number of users", "Network traffic"],
+        "correct_answer": "Data redundancy",
+        "difficulty": "easy",
+        "tags": ["sql", "database"],
+    },
+    {
+        "id": "se-27",
+        "question_text": "Which SQL command removes a table definition along with its data?",
+        "options": ["DELETE", "DROP", "TRUNCATE only", "UPDATE"],
+        "correct_answer": "DROP",
+        "difficulty": "easy",
+        "tags": ["sql", "database"],
+    },
+    {
+        "id": "se-28",
+        "question_text": "What does an INNER JOIN return?",
+        "options": ["All rows from left table", "All rows from right table", "Only matching rows from both tables", "Cartesian product"],
+        "correct_answer": "Only matching rows from both tables",
+        "difficulty": "easy",
+        "tags": ["sql", "joins"],
+    },
+    {
+        "id": "se-29",
+        "question_text": "Which JOIN returns all rows from the left table and matching rows from the right table?",
+        "options": ["RIGHT JOIN", "LEFT JOIN", "INNER JOIN", "CROSS JOIN"],
+        "correct_answer": "LEFT JOIN",
+        "difficulty": "easy",
+        "tags": ["sql", "joins"],
+    },
+    {
+        "id": "se-30",
+        "question_text": "What is the purpose of an index in databases?",
+        "options": ["Improve search/query performance", "Increase redundancy", "Encrypt data", "Replace primary keys"],
+        "correct_answer": "Improve search/query performance",
+        "difficulty": "easy",
+        "tags": ["sql", "database"],
+    },
+    {
+        "id": "se-31",
+        "question_text": "In transaction management, ROLLBACK is used to:",
+        "options": ["Persist changes", "Undo uncommitted changes", "Delete database", "Create index"],
+        "correct_answer": "Undo uncommitted changes",
+        "difficulty": "easy",
+        "tags": ["sql", "transactions"],
+    },
+    {
+        "id": "se-32",
+        "question_text": "In transaction management, COMMIT is used to:",
+        "options": ["Save changes permanently", "Undo changes", "Drop table", "Start a deadlock"],
+        "correct_answer": "Save changes permanently",
+        "difficulty": "easy",
+        "tags": ["sql", "transactions"],
+    },
+    {
+        "id": "se-33",
+        "question_text": "In operating systems, what is a deadlock?",
+        "options": ["A process crash", "A situation where processes wait indefinitely for each other", "A memory leak", "A scheduling optimization"],
+        "correct_answer": "A situation where processes wait indefinitely for each other",
+        "difficulty": "medium",
+        "tags": ["os", "concurrency"],
+    },
+    {
+        "id": "se-34",
+        "question_text": "Round Robin scheduling is:",
+        "options": ["Preemptive", "Non-preemptive", "Both", "Neither"],
+        "correct_answer": "Preemptive",
+        "difficulty": "easy",
+        "tags": ["os", "scheduling"],
+    },
+    {
+        "id": "se-35",
+        "question_text": "In memory management, paging divides memory into blocks of:",
+        "options": ["Variable size", "Fixed size", "Random size", "Tree nodes"],
+        "correct_answer": "Fixed size",
+        "difficulty": "easy",
+        "tags": ["os", "memory"],
+    },
+    {
+        "id": "se-36",
+        "question_text": "What does page fault mean?",
+        "options": ["A page is missing in main memory and must be loaded", "A CPU crash", "A syntax error", "Heap overflow"],
+        "correct_answer": "A page is missing in main memory and must be loaded",
+        "difficulty": "medium",
+        "tags": ["os", "memory"],
+    },
+    {
+        "id": "se-37",
+        "question_text": "A thread is best described as:",
+        "options": ["A lightweight process", "A heavy process", "A database lock", "A disk block"],
+        "correct_answer": "A lightweight process",
+        "difficulty": "easy",
+        "tags": ["os", "processes"],
+    },
+    {
+        "id": "se-38",
+        "question_text": "What does starvation mean in CPU scheduling?",
+        "options": ["A process never gets CPU time", "CPU is always idle", "All processes are blocked by I/O", "Page replacement failure"],
+        "correct_answer": "A process never gets CPU time",
+        "difficulty": "medium",
+        "tags": ["os", "scheduling"],
+    },
+    {
+        "id": "se-39",
+        "question_text": "Encapsulation in OOP is the concept of:",
+        "options": ["Hiding internal data and implementation details", "Showing all class data publicly", "Multiple inheritance only", "Automatic garbage collection"],
+        "correct_answer": "Hiding internal data and implementation details",
+        "difficulty": "easy",
+        "tags": ["oop"],
+    },
+    {
+        "id": "se-40",
+        "question_text": "Abstraction in OOP primarily means:",
+        "options": ["Hiding implementation complexity", "Copying objects", "Deleting data", "Running code in parallel"],
+        "correct_answer": "Hiding implementation complexity",
+        "difficulty": "easy",
+        "tags": ["oop"],
+    },
+    {
+        "id": "se-41",
+        "question_text": "Polymorphism in OOP refers to:",
+        "options": ["One function taking many forms", "Only compile-time constants", "Using only interfaces", "Creating static classes"],
+        "correct_answer": "One function taking many forms",
+        "difficulty": "easy",
+        "tags": ["oop"],
+    },
+    {
+        "id": "se-42",
+        "question_text": "Method overriding occurs when:",
+        "options": ["A subclass redefines a parent class method", "Two methods have different names", "A method has optional params", "A class has no constructor"],
+        "correct_answer": "A subclass redefines a parent class method",
+        "difficulty": "medium",
+        "tags": ["oop"],
+    },
+    {
+        "id": "se-43",
+        "question_text": "In software engineering, REST commonly refers to:",
+        "options": ["A style for designing web APIs", "A SQL optimizer", "A Java compiler", "A cloud vendor"],
+        "correct_answer": "A style for designing web APIs",
+        "difficulty": "easy",
+        "tags": ["backend", "api"],
+    },
+    {
+        "id": "se-44",
+        "question_text": "HTTPS is:",
+        "options": ["HTTP over a secure encrypted connection", "A database schema", "A hashing algorithm", "A container runtime"],
+        "correct_answer": "HTTP over a secure encrypted connection",
+        "difficulty": "easy",
+        "tags": ["web", "security"],
+    },
+    {
+        "id": "se-45",
+        "question_text": "JSON is primarily used as:",
+        "options": ["A data interchange format", "A compiled language", "A database engine", "An OS scheduler"],
+        "correct_answer": "A data interchange format",
+        "difficulty": "easy",
+        "tags": ["web", "data-format"],
+    },
+    {
+        "id": "se-46",
+        "question_text": "Docker is used for:",
+        "options": ["Containerizing applications", "Managing SQL joins", "Running only virtual machines", "Writing CSS"],
+        "correct_answer": "Containerizing applications",
+        "difficulty": "easy",
+        "tags": ["devops", "containers"],
+    },
+    {
+        "id": "se-47",
+        "question_text": "Kubernetes is primarily a:",
+        "options": ["Container orchestration platform", "Version control system", "Programming language", "Unit testing framework"],
+        "correct_answer": "Container orchestration platform",
+        "difficulty": "medium",
+        "tags": ["devops", "containers"],
+    },
+    {
+        "id": "se-48",
+        "question_text": "Git is mainly used for:",
+        "options": ["Version control", "Database indexing", "Thread scheduling", "Memory paging"],
+        "correct_answer": "Version control",
+        "difficulty": "easy",
+        "tags": ["tools", "git"],
+    },
+    {
+        "id": "se-49",
+        "question_text": "A Git branch is best described as:",
+        "options": ["An independent line of development", "A deleted commit", "A permanent release tag", "A merge conflict file"],
+        "correct_answer": "An independent line of development",
+        "difficulty": "easy",
+        "tags": ["tools", "git"],
+    },
+    {
+        "id": "se-50",
+        "question_text": "CI/CD is used to:",
+        "options": ["Automate build, test, and deployment pipelines", "Create only UI mockups", "Replace version control", "Manage only databases"],
+        "correct_answer": "Automate build, test, and deployment pipelines",
+        "difficulty": "easy",
+        "tags": ["devops", "ci-cd"],
+    },
+]
+
+
 def _flatten_questions() -> List[Dict[str, Any]]:
 
     items: List[Dict[str, Any]] = []
@@ -2658,6 +3063,21 @@ def _flatten_questions() -> List[Dict[str, Any]]:
 
 def _normalize_quiz_text(value: Optional[str]) -> str:
     return (value or "").strip().lower()
+
+
+def _normalize_role_text(value: Optional[str]) -> str:
+    raw = _normalize_quiz_text(value)
+    if not raw:
+        return ""
+    normalized = re.sub(r"[^a-z0-9]+", " ", raw).strip()
+    aliases = {
+        "software developer": "software engineer",
+        "software engineering": "software engineer",
+        "software-engineer": "software engineer",
+        "software-developer": "software engineer",
+        "sde": "software engineer",
+    }
+    return aliases.get(normalized, normalized)
 
 
 QUIZ_RELEVANCE_STOP_WORDS = {
@@ -2782,6 +3202,31 @@ def _filter_quiz_candidates(subject: str, topic: Optional[str], difficulty: str)
 
 
 def _build_mcq_from_question(raw_question: Dict[str, Any], quiz_id: int, question_order: int) -> Dict[str, Any]:
+    direct_question_text = str(raw_question.get("question_text") or "").strip()
+    direct_options = raw_question.get("options")
+    direct_correct = str(raw_question.get("correct_answer") or "").strip()
+    if direct_question_text and isinstance(direct_options, list) and direct_correct:
+        tags = [str(tag).strip() for tag in raw_question.get("tags", []) if str(tag).strip()]
+        options = [str(option).strip() for option in direct_options if str(option).strip()]
+        if direct_correct not in options:
+            options.append(direct_correct)
+        deduped_options: List[str] = []
+        for option in options:
+            if option not in deduped_options:
+                deduped_options.append(option)
+        random.shuffle(deduped_options)
+        return {
+            "id": next(QUIZ_QUESTION_ID_COUNTER),
+            "quiz_id": quiz_id,
+            "question_text": direct_question_text,
+            "question_type": "mcq",
+            "options": deduped_options,
+            "points": 1,
+            "topic_tags": tags,
+            "question_order": question_order,
+            "_correct_answer": direct_correct,
+        }
+
     tags = [str(tag).strip() for tag in raw_question.get("tags", []) if str(tag).strip()]
     source = str(raw_question.get("source") or "general").strip().title()
     title = str(raw_question.get("title") or "Interview Question").strip()
@@ -4120,6 +4565,59 @@ async def generate_quiz(
     source_mode = (request.source_mode or "auto").strip().lower()
     if source_mode not in {"auto", "web_only", "internal_only"}:
         raise HTTPException(status_code=400, detail="source_mode must be one of: auto, web_only, internal_only")
+
+    target_role = _normalize_role_text(request.target_role)
+    if target_role == "software engineer":
+        role_candidates = SOFTWARE_ENGINEER_MIXED_QUESTION_BANK
+        requested_difficulty = _normalize_quiz_text(request.difficulty)
+        if requested_difficulty in {"easy", "medium", "hard"}:
+            role_candidates = [
+                question
+                for question in role_candidates
+                if _normalize_quiz_text(question.get("difficulty")) == requested_difficulty
+            ] or SOFTWARE_ENGINEER_MIXED_QUESTION_BANK
+
+        if len(role_candidates) >= request.num_questions:
+            selected = random.sample(role_candidates, request.num_questions)
+        else:
+            selected = role_candidates.copy()
+            while len(selected) < request.num_questions:
+                selected.append(random.choice(role_candidates))
+
+        quiz_id = next(QUIZ_ID_COUNTER)
+        created_at = _current_timestamp()
+        quiz_record = {
+            "id": quiz_id,
+            "title": "Software Engineer Mixed Quiz",
+            "description": "Mixed quiz covering DSA, DBMS, OS, OOP, and software fundamentals.",
+            "subject": subject,
+            "difficulty_level": request.difficulty.lower(),
+            "total_questions": request.num_questions,
+            "time_limit_minutes": max(5, request.num_questions * 2),
+            "quiz_type": "mixed",
+            "content_source": "software_engineer_role_bank",
+            "created_at": created_at,
+        }
+
+        if user_id not in USER_QUIZZES:
+            USER_QUIZZES[user_id] = []
+        USER_QUIZZES[user_id].append(quiz_record)
+
+        QUIZ_QUESTIONS[quiz_id] = [
+            _build_mcq_from_question(raw_question, quiz_id=quiz_id, question_order=index)
+            for index, raw_question in enumerate(selected, start=1)
+        ]
+
+        persisted_id = await _persist_quiz(user_id, quiz_record, QUIZ_QUESTIONS[quiz_id])
+        if persisted_id:
+            quiz_record["id"] = persisted_id
+            QUIZ_QUESTIONS[persisted_id] = QUIZ_QUESTIONS.pop(quiz_id)
+            for question in QUIZ_QUESTIONS[persisted_id]:
+                question["quiz_id"] = persisted_id
+            if USER_QUIZZES.get(user_id):
+                USER_QUIZZES[user_id][-1]["id"] = persisted_id
+
+        return quiz_record
 
     selected_source_ids = [
         source_id.strip().lower()
