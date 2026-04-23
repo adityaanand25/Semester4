@@ -6,10 +6,12 @@ import { ArrowRight } from "lucide-react"
 import Link from "next/link"
 import { useAuthStore } from "@/lib/store"
 import { useEffect, useState } from "react"
+import { systemAPI } from "@/lib/api"
 
 export default function Home() {
   const { user } = useAuthStore()
   const [mounted, setMounted] = useState(false)
+  const [backendStatus, setBackendStatus] = useState<"checking" | "online" | "offline">("checking")
   const targetCompanies = [
     { name: "PhonePe", logo: "https://cdn.simpleicons.org/phonepe" },
     { name: "Google", logo: "https://cdn.simpleicons.org/google" },
@@ -25,6 +27,29 @@ export default function Home() {
 
   useEffect(() => {
     setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    let ignore = false
+
+    const checkHealth = async () => {
+      try {
+        const response = await systemAPI.getHealth()
+        if (!ignore) {
+          setBackendStatus(response.status === "ok" ? "online" : "offline")
+        }
+      } catch {
+        if (!ignore) {
+          setBackendStatus("offline")
+        }
+      }
+    }
+
+    checkHealth()
+
+    return () => {
+      ignore = true
+    }
   }, [])
 
   if (!mounted) return null
@@ -55,7 +80,7 @@ export default function Home() {
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 {user ? (
                   <Link href="/dashboard">
-                    <Button size="lg" className="bg-gradient-to-r from-primary to-accent hover:opacity-90 glow">
+                    <Button size="lg" className="bg-linear-to-r from-primary to-accent hover:opacity-90 glow">
                       Go to Dashboard
                       <ArrowRight className="ml-2 w-4 h-4" />
                     </Button>
@@ -63,7 +88,7 @@ export default function Home() {
                 ) : (
                   <>
                     <Link href="/signup">
-                      <Button size="lg" className="bg-gradient-to-r from-primary to-accent hover:opacity-90 glow">
+                      <Button size="lg" className="bg-linear-to-r from-primary to-accent hover:opacity-90 glow">
                         Get Started
                         <ArrowRight className="ml-2 w-4 h-4" />
                       </Button>
@@ -141,6 +166,45 @@ export default function Home() {
                   <span className="text-sm md:text-base text-foreground">{company.name}</span>
                 </div>
               ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="pb-24 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-7xl mx-auto">
+            <div className="glass p-8 md:p-10 space-y-8">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                  <h2 className="text-3xl md:text-4xl font-bold gradient-text">Built For Career Outcomes</h2>
+                  <p className="text-muted-foreground mt-2 max-w-2xl">
+                    Not just lessons. You get measurable progress, strategic guidance, and interview execution support in one workflow.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-3 py-1.5 w-fit">
+                  <span className={`h-2.5 w-2.5 rounded-full ${backendStatus === "online" ? "bg-emerald-400" : backendStatus === "offline" ? "bg-red-400" : "bg-amber-400"}`} />
+                  <span className="text-sm text-muted-foreground">
+                    Backend status: {backendStatus === "checking" ? "Checking" : backendStatus === "online" ? "Online" : "Offline"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-4">
+                <div className="rounded-xl border border-white/15 bg-white/5 p-5">
+                  <p className="text-sm text-muted-foreground">Execution Stack</p>
+                  <p className="text-2xl font-bold mt-2">Learning + Quiz + Interview</p>
+                  <p className="text-sm text-muted-foreground mt-2">A complete preparation loop instead of disconnected tools.</p>
+                </div>
+                <div className="rounded-xl border border-white/15 bg-white/5 p-5">
+                  <p className="text-sm text-muted-foreground">Decision Intelligence</p>
+                  <p className="text-2xl font-bold mt-2">AI Recommendations</p>
+                  <p className="text-sm text-muted-foreground mt-2">Personalized recommendations adapt to your ongoing performance.</p>
+                </div>
+                <div className="rounded-xl border border-white/15 bg-white/5 p-5">
+                  <p className="text-sm text-muted-foreground">Career Proof</p>
+                  <p className="text-2xl font-bold mt-2">Resume + Certificate Pipeline</p>
+                  <p className="text-sm text-muted-foreground mt-2">Turn practice into profile strength with verified artifacts.</p>
+                </div>
+              </div>
             </div>
           </div>
         </section>

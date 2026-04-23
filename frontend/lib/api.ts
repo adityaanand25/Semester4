@@ -177,6 +177,10 @@ export interface AuthResponse {
   refresh_token?: string
 }
 
+export interface SystemHealth {
+  status: string
+}
+
 export interface LoginPayload {
   email: string
   password: string
@@ -918,9 +922,16 @@ export const interviewAPI = {
     target_role: string
     interview_type: string
     persona: string
+    question_count: number
     questions_asked: number
     questions_answered: number
     current_question_index: number
+    current_question?: {
+      question_id?: string
+      question?: string
+      difficulty?: string
+      question_text?: string
+    } | null
     start_time: string
     end_time: string | null
   }> {
@@ -979,6 +990,15 @@ export const interviewAPI = {
     const { data } = await api.post(
       `/interview/analyze-speech?${params.toString()}`
     )
+    return data
+  },
+}
+
+// ==================== SYSTEM API ====================
+
+export const systemAPI = {
+  async getHealth(): Promise<SystemHealth> {
+    const { data } = await api.get("/health")
     return data
   },
 }

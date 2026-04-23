@@ -102,9 +102,51 @@ export default function InterviewPage() {
   const [recordingStartTime, setRecordingStartTime] = useState<number>(0)
   const [recordingDuration, setRecordingDuration] = useState<number>(0)
   const [isTranscribing, setIsTranscribing] = useState(false)
+  const [syncingSession, setSyncingSession] = useState(false)
+  const [liveRecordingSeconds, setLiveRecordingSeconds] = useState(0)
   
   const videoRef = useRef<HTMLVideoElement>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+
+  const syncSessionStatus = async (sessionId: string) => {
+    try {
+      setSyncingSession(true)
+      const status = await interviewAPI.getInterviewStatus(sessionId)
+
+      setCurrentSession((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          question_count: status.question_count || prev.question_count,
+          total_questions: status.question_count || prev.total_questions,
+          current_question_number: Math.min(
+            status.question_count || prev.question_count || 1,
+            (status.current_question_index || 0) + 1
+          ),
+        }
+      })
+
+      if (status.current_question) {
+        setCurrentQuestion({
+          title: status.current_question.question || "Question",
+          text: status.current_question.question_text || status.current_question.question || "",
+          difficulty: status.current_question.difficulty,
+        })
+      }
+
+      if (status.status === "completed") {
+        const report = await interviewAPI.getInterviewReport(sessionId)
+        setFinalReport(report)
+        setInterviewComplete(true)
+        setCurrentQuestion(null)
+        stopMediaStream()
+      }
+    } catch (err: any) {
+      setError(formatErrorMessage(err))
+    } finally {
+      setSyncingSession(false)
+    }
+  }
 
   useEffect(() => {
     const fetchPersonas = async () => {
@@ -117,6 +159,43 @@ export default function InterviewPage() {
       }
     }
     fetchPersonas()
+  }, [])
+
+  useEffect(() => {
+    const restoreActiveSession = async () => {
+      if (!getStoredAccessToken()) return
+
+      try {
+        const active = await interviewAPI.getActiveSessions()
+        const live = active.sessions.find((s) => s.status === "active")
+        if (!live) return
+
+        setSessionStarted(true)
+        setInterviewComplete(false)
+        setCurrentFeedback(null)
+        setFinalReport(null)
+        setCurrentSession({
+          session_id: live.session_id,
+          persona: "",
+          question_count: Math.max(1, live.questions_answered + 1),
+          current_question_number: Math.max(1, live.questions_answered + 1),
+          current_question: "Resuming your interview...",
+          difficulty: "medium",
+          start_time: live.start_time,
+          interviewer: { name: "AI Interviewer" },
+        })
+        setCurrentQuestion({
+          title: "Resuming your interview...",
+          text: "Fetching your latest question",
+        })
+
+        await syncSessionStatus(live.session_id)
+      } catch {
+        // Ignore restore failures to avoid blocking normal startup.
+      }
+    }
+
+    restoreActiveSession()
   }, [])
 
   const startInterview = async (persona: string) => {
@@ -306,6 +385,7 @@ export default function InterviewPage() {
     recorder.start()
     setIsRecording(true)
     setRecordingStartTime(Date.now())
+    setLiveRecordingSeconds(0)
     setAnswer("") // Clear previous answer
   }
 
@@ -363,6 +443,8 @@ export default function InterviewPage() {
           text: feedback.next_question.question_text || feedback.next_question.question,
           difficulty: feedback.next_question.difficulty,
         })
+      } else {
+        await syncSessionStatus(currentSession.session_id)
       }
     } catch (err: any) {
       console.error("Submit error:", err)
@@ -400,6 +482,28 @@ export default function InterviewPage() {
     }, 800)
     return () => clearTimeout(timer)
   }, [sessionStarted, interviewComplete, currentQuestion?.title, currentQuestion?.text])
+
+  useEffect(() => {
+    if (!isRecording) return
+
+    const timer = window.setInterval(() => {
+      setLiveRecordingSeconds(Math.max(0, Math.floor((Date.now() - recordingStartTime) / 1000)))
+    }, 500)
+
+    return () => window.clearInterval(timer)
+  }, [isRecording, recordingStartTime])
+
+  useEffect(() => {
+    if (!sessionStarted || interviewComplete || !currentSession?.session_id) return
+
+    const intervalId = window.setInterval(() => {
+      if (!loading && !isTranscribing) {
+        void syncSessionStatus(currentSession.session_id)
+      }
+    }, 2500)
+
+    return () => window.clearInterval(intervalId)
+  }, [sessionStarted, interviewComplete, currentSession?.session_id, loading, isTranscribing])
 
   const isAnswerCorrect = currentFeedback?.evaluation?.is_correct ?? false
   const matchedConcepts = currentFeedback?.evaluation?.matched_concepts ?? []
@@ -629,6 +733,9 @@ export default function InterviewPage() {
                 <p className="text-muted-foreground">
                   Question {currentSession?.current_question_number || 1} of {currentSession?.question_count || currentSession?.total_questions || 1}
                 </p>
+                {syncingSession && (
+                  <p className="text-xs text-muted-foreground mt-1">Syncing live session...</p>
+                )}
               </div>
               <Button variant="outline" onClick={resetInterview}>
                 End Interview
@@ -699,7 +806,7 @@ export default function InterviewPage() {
                     {isRecording && (
                       <span className="text-sm text-red-600 flex items-center gap-2">
                         <span className="h-2 w-2 bg-red-600 rounded-full animate-pulse"></span>
-                        Recording: {Math.floor(recordingDuration || (Date.now() - recordingStartTime) / 1000)}s
+                        Recording: {liveRecordingSeconds}s
                       </span>
                     )}
                     {!isRecording && isTranscribing && (

@@ -792,7 +792,11 @@ async def _fetch_quiz_attempt_results(user_id: str, limit: int = 30) -> List[Dic
         for row in rows:
             payload = (row or {}).get("result_data")
             if isinstance(payload, dict):
-                values.append(payload)
+                enriched_payload = dict(payload)
+                submitted_at = (row or {}).get("submitted_at")
+                if submitted_at:
+                    enriched_payload["submitted_at"] = submitted_at
+                values.append(enriched_payload)
         return values
 
     try:
@@ -4431,6 +4435,16 @@ async def interview_status(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     session = await _get_session_or_404(current_user["id"], session_id)
+    current_question: Optional[Dict[str, Any]] = None
+    if session["status"] == "active" and session.get("current_index", 0) < len(session.get("questions", [])):
+        question = session["questions"][session["current_index"]]
+        current_question = {
+            "question_id": question.get("id"),
+            "question": question.get("title"),
+            "difficulty": question.get("difficulty"),
+            "question_text": question.get("description"),
+        }
+
     return {
         "session_id": session_id,
         "status": session["status"],
@@ -4441,6 +4455,8 @@ async def interview_status(
         "questions_asked": session["questions_answered"],
         "questions_answered": session["questions_answered"],
         "current_question_index": min(session["current_index"], len(session["questions"])),
+        "question_count": len(session["questions"]),
+        "current_question": current_question,
         "start_time": session["start_time"],
         "end_time": session.get("end_time"),
     }
@@ -4889,6 +4905,23 @@ async def submit_quiz_attempt(
     }
     await _submit_quiz_attempt_result(user_id, request.attempt_id, result_payload)
 
+    user_test_scores = _get_or_init_user_data(user_id, USER_TEST_SCORES, list)
+    user_test_scores.append(
+        {
+            "id": request.attempt_id,
+            "user_id": user_id,
+            "test_type": "quiz_attempt",
+            "subject": quiz.get("subject") or "mixed",
+            "score": score,
+            "max_score": max_score,
+            "percentage": round(percentage, 2),
+            "date_taken": _isoformat(submitted_at),
+            "duration_minutes": round(duration_minutes, 2),
+            "topics_covered": [str(topic) for topic in (strong_topics[:5] + weak_topics[:5])],
+            "weak_topics": weak_topics[:5],
+        }
+    )
+
     return result_payload
 
 
@@ -5246,7 +5279,35 @@ async def get_dashboard_overview(current_user: Dict[str, Any] = Depends(get_curr
     # Get or generate sample data for other sections
     resumes = _get_or_init_user_data(user_id, USER_RESUMES, list)
     certificates = _get_or_init_user_data(user_id, USER_CERTIFICATES, list)
-    test_scores = _get_or_init_user_data(user_id, USER_TEST_SCORES, list)
+    quiz_results = await _fetch_quiz_attempt_results(user_id, limit=60)
+    test_scores: List[Dict[str, Any]] = []
+    for result in quiz_results:
+        attempt_id = _safe_int(result.get("attempt_id"))
+        percentage = float(result.get("percentage", 0.0))
+        total_score = _safe_int(result.get("total_score"))
+        max_score = _safe_int(result.get("max_score"))
+        topics_covered = result.get("strengths") or []
+        weak_topics = result.get("weaknesses") or []
+        submitted_at = result.get("submitted_at") or _current_timestamp()
+
+        test_scores.append(
+            {
+                "id": attempt_id,
+                "user_id": user_id,
+                "test_type": "quiz_attempt",
+                "subject": result.get("quiz_title") or "mixed",
+                "score": total_score,
+                "max_score": max_score,
+                "percentage": round(percentage, 2),
+                "date_taken": submitted_at,
+                "duration_minutes": float(result.get("time_taken_minutes", 0.0)),
+                "topics_covered": topics_covered if isinstance(topics_covered, list) else [],
+                "weak_topics": weak_topics if isinstance(weak_topics, list) else [],
+            }
+        )
+
+    if not test_scores:
+        test_scores = _get_or_init_user_data(user_id, USER_TEST_SCORES, list)
     
     return {
         "resumes": resumes,

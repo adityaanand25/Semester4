@@ -100,6 +100,25 @@ export default function Dashboard() {
     }))
   }, [progressHistory])
 
+  const quizTrendData = useMemo(() => {
+    const scores = [...(dashboardOverview?.test_scores ?? [])]
+      .filter((score) => Number.isFinite(Number(score?.percentage)))
+      .sort((a, b) => {
+        const left = new Date(a.date_taken ?? 0).getTime()
+        const right = new Date(b.date_taken ?? 0).getTime()
+        return left - right
+      })
+
+    return scores.map((score, index) => ({
+      date: score.date_taken
+        ? new Date(score.date_taken).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+        : `Attempt ${index + 1}`,
+      score: Math.round(Number(score.percentage)),
+      target: 60,
+      attempt: index + 1,
+    }))
+  }, [dashboardOverview?.test_scores])
+
   const skillRadarData = useMemo(() => {
     const counts: Record<string, number> = {}
     progressHistory.forEach((record) => {
@@ -165,8 +184,62 @@ export default function Dashboard() {
     : learningProgressFromActivityPercent
 
   const quizAccuracyPercent = progressStats ? Math.min(100, Math.max(0, Math.round(progressStats.avg_test_score))) : 0
-  const hasActivityData = activityChartData.length > 0
+  const hasQuizTrendData = quizTrendData.length > 0
   const hasSkillData = skillRadarData.length > 0
+
+  const consistencyIndex = useMemo(() => {
+    if (!progressStats || totalTrackedDays === 0) return 0
+    const streakStrength = Math.min(100, Math.round((progressStats.current_streak / Math.max(1, totalTrackedDays)) * 100))
+    const longevityBoost = Math.min(100, Math.round((progressStats.longest_streak / Math.max(1, totalTrackedDays + 5)) * 100))
+    return Math.round(streakStrength * 0.7 + longevityBoost * 0.3)
+  }, [progressStats, totalTrackedDays])
+
+  const weeklyVelocity = useMemo(() => {
+    if (!progressStats || totalTrackedDays === 0) return 0
+    return Number(((progressStats.total_problems_solved / Math.max(1, totalTrackedDays)) * 7).toFixed(1))
+  }, [progressStats, totalTrackedDays])
+
+  const interviewConfidence = useMemo(() => {
+    if (!progressStats) return 0
+    return Math.min(100, Math.round(quizAccuracyPercent * 0.55 + interviewReadinessPercent * 0.45))
+  }, [progressStats, quizAccuracyPercent, interviewReadinessPercent])
+
+  const careerMomentumScore = useMemo(() => {
+    return Math.min(
+      100,
+      Math.round(learningProgressPercent * 0.35 + consistencyIndex * 0.2 + quizAccuracyPercent * 0.25 + interviewConfidence * 0.2)
+    )
+  }, [learningProgressPercent, consistencyIndex, quizAccuracyPercent, interviewConfidence])
+
+  const momentumLabel = useMemo(() => {
+    if (careerMomentumScore >= 80) return "High"
+    if (careerMomentumScore >= 55) return "Building"
+    return "Early"
+  }, [careerMomentumScore])
+
+  const nextWeekPlan = useMemo(() => {
+    const actions: string[] = []
+
+    if (weeklyVelocity < 14) {
+      actions.push("Raise coding volume to at least 2 problems per day for the next 7 days.")
+    } else {
+      actions.push("Maintain your current coding pace and add 3 hard problems this week.")
+    }
+
+    if (quizAccuracyPercent < 70) {
+      actions.push("Take 2 focused quizzes and review every incorrect question within 24 hours.")
+    } else {
+      actions.push("Attempt 1 timed mock test and target a +5% score improvement.")
+    }
+
+    if (interviewReadinessPercent < 60) {
+      actions.push("Complete 2 mock interviews with feedback-driven revision after each session.")
+    } else {
+      actions.push("Run 1 advanced mock interview and refine your behavioral stories with metrics.")
+    }
+
+    return actions
+  }, [weeklyVelocity, quizAccuracyPercent, interviewReadinessPercent])
 
   useEffect(() => {
     if (!user) {
@@ -804,6 +877,36 @@ export default function Dashboard() {
               )}
             </div>
 
+            {/* Impact Snapshot */}
+            <Card className="glass p-6 space-y-5">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-semibold gradient-text">Impact Snapshot</h2>
+                <span className="text-xs px-3 py-1 rounded-full border border-white/20 bg-white/5 text-muted-foreground">
+                  Live from your activity
+                </span>
+              </div>
+              <div className="grid md:grid-cols-4 gap-4">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-sm text-muted-foreground">Consistency Index</p>
+                  <p className="text-3xl font-bold text-primary mt-2">{consistencyIndex}%</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-sm text-muted-foreground">Weekly Velocity</p>
+                  <p className="text-3xl font-bold text-accent mt-2">{weeklyVelocity}</p>
+                  <p className="text-xs text-muted-foreground">problems/week</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-sm text-muted-foreground">Interview Confidence</p>
+                  <p className="text-3xl font-bold text-secondary mt-2">{interviewConfidence}%</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-sm text-muted-foreground">Career Momentum</p>
+                  <p className="text-3xl font-bold gradient-text mt-2">{careerMomentumScore}%</p>
+                  <p className="text-xs text-muted-foreground">{momentumLabel} momentum</p>
+                </div>
+              </div>
+            </Card>
+
             {/* Charts Section */}
             <div className="grid lg:grid-cols-2 gap-6">
               {/* Performance Trend */}
@@ -815,8 +918,34 @@ export default function Dashboard() {
                   </div>
                   {metricsLoading ? (
                     <div className="h-[300px] rounded-lg bg-white/5 animate-pulse" />
+                  ) : hasQuizTrendData ? (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <LineChart data={quizTrendData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                        <XAxis dataKey="date" stroke="rgba(255,255,255,0.65)" />
+                        <YAxis domain={[0, 100]} stroke="rgba(255,255,255,0.65)" />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "rgba(10, 10, 14, 0.95)",
+                            border: "1px solid rgba(255, 255, 255, 0.15)",
+                            borderRadius: "10px",
+                          }}
+                        />
+                        <Legend />
+                        <Line
+                          type="monotone"
+                          dataKey="score"
+                          name="Quiz score %"
+                          stroke="oklch(0.65 0.28 270)"
+                          strokeWidth={3}
+                          dot={{ r: 5, strokeWidth: 1, stroke: "oklch(0.65 0.28 270)", fill: "oklch(0.65 0.28 270)" }}
+                          activeDot={{ r: 7 }}
+                        />
+                        <Line type="monotone" dataKey="target" name="Pass target %" stroke="oklch(0.62 0.16 150)" strokeDasharray="6 4" dot={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
                   ) : (
-                    <p className="text-sm text-muted-foreground">No quiz activity recorded yet.</p>
+                    <p className="text-sm text-muted-foreground">No quiz attempts found yet. Complete a quiz to see your real performance trend.</p>
                   )}
                 </div>
               </Card>
@@ -887,6 +1016,27 @@ export default function Dashboard() {
                 </Card>
               </Link>
             </div>
+
+            {/* 7-Day Plan */}
+            <Card className="glass p-6 space-y-4">
+              <h2 className="text-2xl font-semibold">7-Day Impact Plan</h2>
+              <p className="text-sm text-muted-foreground">
+                Action sequence generated from your latest performance signals.
+              </p>
+              <div className="space-y-3">
+                {nextWeekPlan.map((action, index) => (
+                  <div
+                    key={action}
+                    className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/5 p-3"
+                  >
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/20 text-primary text-sm font-semibold">
+                      {index + 1}
+                    </div>
+                    <p className="text-sm leading-relaxed">{action}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
           </div>
         </div>
       </main>
